@@ -1,5 +1,5 @@
 # SobrietySupport
-Simple React Sketch for a Sobriety support react 
+Simple React component for a Sobriety support react 
 # SobrietySupport React Component
 
 A compassionate, feature-rich React component designed to support individuals on their sobriety journey. This component provides real-time encouragement, progress tracking, and emergency support features while maintaining user privacy and data security.
