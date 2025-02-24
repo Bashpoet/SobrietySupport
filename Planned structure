@@ -1,0 +1,27 @@
+// Planned structure
+src/
+├── components/
+│   ├── dashboard/
+│   │   ├── BenefitCard.jsx
+│   │   ├── ProgressWidget.jsx
+│   │   └── DashboardTab.jsx
+│   ├── journal/
+│   │   ├── JournalEntry.jsx
+│   │   ├── JournalPrompt.jsx
+│   │   └── JournalTab.jsx
+│   ├── support/
+│   │   ├── UrgeSupportChat.jsx
+│   │   ├── EmergencyResources.jsx
+│   │   └── CopingStrategy.jsx
+│   └── shared/
+│       ├── Header.jsx
+│       ├── Navigation.jsx
+│       └── Settings.jsx
+├── hooks/
+│   ├── useLocalStorage.js
+│   ├── useClaudeAPI.js
+│   └── useSobrietyCalculations.js
+├── context/
+│   ├── UserDataContext.jsx
+│   └── APIContext.jsx
+└── App.jsx
