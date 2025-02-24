@@ -2,7 +2,6 @@
 
 A comprehensive, personalized dashboard for maintaining sobriety with intelligent features for motivation, reflection, and real-time support.
 
-![Sobriety Support Dashboard](screenshots/dashboard.png)
 
 ## Features
 
