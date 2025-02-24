@@ -11,7 +11,8 @@ import {
   CheckCircle, Shield, Phone, Medal, Trophy, Calendar,
   UserCircle, Settings, ChevronDown, ChevronUp, MessageCircle,
   Bell, AlertTriangle, ArrowRight, BarChart, Zap, BookOpen,
-  Save, RefreshCw, X, Menu, PlusCircle, ThumbsUp, Users
+  Save, RefreshCw, X, Menu, PlusCircle, ThumbsUp, Users,
+  TrendingUp, Share2, Info, HelpCircle, MoreHorizontal, Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -53,14 +54,25 @@ const SobrietySupport = () => {
   const [showTriggerAlert, setShowTriggerAlert] = useState(false);
   const [selectedCopingStrategy, setSelectedCopingStrategy] = useState(null);
   
+  // New state variables for UI improvements
+  const [showingAllBenefits, setShowingAllBenefits] = useState(null);
+  const [showAllJournalEntries, setShowAllJournalEntries] = useState(false);
+  const [dailyPrompt, setDailyPrompt] = useState('');
+  const [customGoals, setCustomGoals] = useState([]);
+  
   // Refs
   const lastInteractionRef = useRef(Date.now());
   const timerRef = useRef(null);
   
   // Initial load effect
   useEffect(() => {
-    // Time update interval
-    const interval = setInterval(() => setTimeNow(new Date()), 60000);
+    // Optimized time update interval - only updates when hour changes
+    const interval = setInterval(() => {
+      const now = new Date();
+      if (now.getHours() !== timeNow.getHours()) {
+        setTimeNow(now);
+      }
+    }, 300000); // Check every 5 minutes instead of every minute
     
     // Load all saved data from localStorage
     loadUserData();
@@ -70,6 +82,20 @@ const SobrietySupport = () => {
     
     // Set up check-in reminder
     setupCheckInReminder();
+    
+    // Request notification permission if not already granted
+    if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+      // We'll wait for user interaction before requesting
+      const handleFirstInteraction = () => {
+        Notification.requestPermission();
+        // Remove event listeners after first interaction
+        document.removeEventListener('click', handleFirstInteraction);
+        document.removeEventListener('keydown', handleFirstInteraction);
+      };
+      
+      document.addEventListener('click', handleFirstInteraction);
+      document.addEventListener('keydown', handleFirstInteraction);
+    }
     
     return () => {
       clearInterval(interval);
@@ -84,25 +110,76 @@ const SobrietySupport = () => {
   
   // Load all user data from localStorage
   const loadUserData = () => {
-    // Core data
-    const storedStreak = localStorage.getItem('sobrietyStreak');
-    const storedAchievements = localStorage.getItem('achievements');
-    const storedPositiveChoices = localStorage.getItem('positiveChoices');
-    
-    // Enhanced data
-    const storedUserName = localStorage.getItem('userName');
-    const storedSobrietyDate = localStorage.getItem('sobrietyDate');
-    const storedJournalEntries = localStorage.getItem('journalEntries');
-    const storedTriggers = localStorage.getItem('triggers');
-    
-    // Set state from stored values
-    if (storedStreak) setStreak(parseInt(storedStreak, 10));
-    if (storedAchievements) setAchievements(JSON.parse(storedAchievements));
-    if (storedPositiveChoices) setPositiveChoices(parseInt(storedPositiveChoices, 10));
-    if (storedUserName) setUserName(storedUserName);
-    if (storedSobrietyDate) setSobrietyDate(storedSobrietyDate);
-    if (storedJournalEntries) setJournalEntries(JSON.parse(storedJournalEntries));
-    if (storedTriggers) setTriggers(JSON.parse(storedTriggers));
+    try {
+      // Core data
+      const storedStreak = localStorage.getItem('sobrietyStreak');
+      const storedAchievements = localStorage.getItem('achievements');
+      const storedPositiveChoices = localStorage.getItem('positiveChoices');
+      
+      // Enhanced data
+      const storedUserName = localStorage.getItem('userName');
+      const storedSobrietyDate = localStorage.getItem('sobrietyDate');
+      const storedJournalEntries = localStorage.getItem('journalEntries');
+      const storedTriggers = localStorage.getItem('triggers');
+      const storedLastCheckDate = localStorage.getItem('lastCheckDate');
+      
+      // Set state from stored values with error handling
+      if (storedStreak) setStreak(parseInt(storedStreak, 10) || 0);
+      
+      if (storedAchievements) {
+        try {
+          setAchievements(JSON.parse(storedAchievements));
+        } catch (e) {
+          console.error("Error parsing achievements:", e);
+          setAchievements([]);
+        }
+      }
+      
+      if (storedPositiveChoices) setPositiveChoices(parseInt(storedPositiveChoices, 10) || 0);
+      if (storedUserName) setUserName(storedUserName);
+      
+      // Validate sobriety date - ensure it's not in the future
+      if (storedSobrietyDate) {
+        const date = new Date(storedSobrietyDate);
+        if (date <= new Date()) {
+          setSobrietyDate(storedSobrietyDate);
+        } else {
+          setSobrietyDate('');
+          console.warn("Future sobriety date detected and reset");
+        }
+      }
+      
+      if (storedJournalEntries) {
+        try {
+          setJournalEntries(JSON.parse(storedJournalEntries));
+        } catch (e) {
+          console.error("Error parsing journal entries:", e);
+          setJournalEntries([]);
+        }
+      }
+      
+      if (storedTriggers) {
+        try {
+          setTriggers(JSON.parse(storedTriggers));
+        } catch (e) {
+          console.error("Error parsing triggers:", e);
+          setTriggers([]);
+        }
+      }
+      
+      // Additional validation
+      if (storedLastCheckDate) {
+        try {
+          // Validate that it's actually a valid date string
+          new Date(storedLastCheckDate).toDateString();
+        } catch (e) {
+          localStorage.setItem('lastCheckDate', new Date().toDateString());
+        }
+      }
+    } catch (e) {
+      console.error("Error loading user data:", e);
+      setMessage("There was an issue loading your data. Some information may have been reset.");
+    }
   };
   
   // Save all user data to localStorage
@@ -603,8 +680,19 @@ const SobrietySupport = () => {
                   <Input
                     type="date"
                     value={sobrietyDate}
-                    onChange={(e) => setSobrietyDate(e.target.value)}
+                    onChange={(e) => {
+                      const selectedDate = new Date(e.target.value);
+                      const today = new Date();
+                      
+                      if (selectedDate > today) {
+                        setMessage("Please select a date in the past.");
+                        return;
+                      }
+                      setSobrietyDate(e.target.value);
+                    }}
                     className="max-w-xs"
+                    max={new Date().toISOString().split('T')[0]} // Prevent future dates
+                    aria-label="Set your sobriety start date"
                   />
                 </div>
                 
@@ -780,6 +868,16 @@ const SobrietySupport = () => {
                       showingReason === reason.id ? 'bg-white shadow-lg' : 'bg-white/50 hover:bg-white'
                     }`}
                     onClick={() => handleReasonClick(reason.id)}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleReasonClick(reason.id);
+                      }
+                    }}
+                    role="button"
+                    aria-expanded={showingReason === reason.id}
+                    aria-controls={`reason-content-${reason.id}`}
                   >
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-3">
@@ -792,6 +890,10 @@ const SobrietySupport = () => {
                           <Progress 
                             value={reason.progress(calculateSobrietyDays())} 
                             className="h-2"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={Math.round(reason.progress(calculateSobrietyDays()))}
+                            aria-label={`${reason.title} progress: ${Math.round(reason.progress(calculateSobrietyDays()))}%`}
                           />
                         </div>
                       </div>
@@ -803,6 +905,7 @@ const SobrietySupport = () => {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -10 }}
                             className="mt-3 space-y-3"
+                            id={`reason-content-${reason.id}`}
                           >
                             <p className="text-sm text-gray-600">{reason.content}</p>
                             
@@ -815,22 +918,25 @@ const SobrietySupport = () => {
                                     <div 
                                       key={idx} 
                                       className={`flex items-center gap-2 text-sm ${
-                                        achieved ? 'text-green-600' : 'text-gray-400'
+                                        achieved ? 'text-green-600' : 'text-gray-500'
                                       }`}
                                     >
                                       {achieved ? (
-                                        <CheckCircle className="w-4 h-4" />
+                                        <CheckCircle className="w-4 h-4" aria-hidden="true" />
                                       ) : (
-                                        <Clock className="w-4 h-4" />
+                                        <Clock className="w-4 h-4" aria-hidden="true" />
                                       )}
-                                      <span>Day {benefit.day}: {benefit.title}</span>
+                                      <span>
+                                        Day {benefit.day}: {benefit.title}
+                                        {achieved && <span className="sr-only"> (achieved)</span>}
+                                      </span>
                                     </div>
                                   );
                                 })}
                               </div>
                             </div>
                             
-                            <p className="text-sm font-medium text-purple-600">
+                            <p className="text-sm font-medium text-purple-700">
                               Try this instead: {reason.alternative}
                             </p>
                           </motion.div>
@@ -993,6 +1099,18 @@ const SobrietySupport = () => {
                       onClick={() => setSelectedCopingStrategy(
                         selectedCopingStrategy === strategy.id ? null : strategy.id
                       )}
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedCopingStrategy(
+                            selectedCopingStrategy === strategy.id ? null : strategy.id
+                          );
+                        }
+                      }}
+                      role="button"
+                      aria-expanded={selectedCopingStrategy === strategy.id}
+                      aria-controls={`strategy-content-${strategy.id}`}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-center gap-3 mb-2">
@@ -1009,6 +1127,7 @@ const SobrietySupport = () => {
                               animate={{ opacity: 1, height: 'auto' }}
                               exit={{ opacity: 0, height: 0 }}
                               className="mt-3 overflow-hidden"
+                              id={`strategy-content-${strategy.id}`}
                             >
                               <ol className="list-decimal list-inside space-y-1 text-sm pl-1">
                                 {strategy.steps.map((step, idx) => (
@@ -1025,6 +1144,7 @@ const SobrietySupport = () => {
                                     setNewJournalEntry(message);
                                     setActiveTab('journal');
                                   }}
+                                  aria-label={`Log success using ${strategy.title} technique`}
                                 >
                                   <ThumbsUp className="w-3 h-3 mr-2" />
                                   Log Success
@@ -1132,6 +1252,16 @@ const SobrietySupport = () => {
                     showingReason === reason.id ? 'bg-white shadow-lg' : 'bg-white/50 hover:bg-white'
                   }`}
                   onClick={() => handleReasonClick(reason.id)}
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleReasonClick(reason.id);
+                    }
+                  }}
+                  role="button"
+                  aria-expanded={showingReason === reason.id}
+                  aria-controls={`mobile-reason-content-${reason.id}`}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-2">
@@ -1144,6 +1274,10 @@ const SobrietySupport = () => {
                         <Progress 
                           value={reason.progress(calculateSobrietyDays())} 
                           className="h-2"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={Math.round(reason.progress(calculateSobrietyDays()))}
+                          aria-label={`${reason.title} progress: ${Math.round(reason.progress(calculateSobrietyDays()))}%`}
                         />
                       </div>
                     </div>
@@ -1155,34 +1289,66 @@ const SobrietySupport = () => {
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -10 }}
                           className="mt-3 space-y-3"
+                          id={`mobile-reason-content-${reason.id}`}
                         >
                           <p className="text-sm text-gray-600">{reason.content}</p>
                           
                           <div className="border-t border-b border-gray-100 py-2 my-3">
-                            <h4 className="text-sm font-medium mb-2">Progress:</h4>
+                            <div className="flex justify-between items-center mb-2">
+                              <h4 className="text-sm font-medium">Progress:</h4>
+                              
+                              {/* Show all benefits button */}
+                              {reason.benefits.length > 3 && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="text-xs h-6 px-2 text-blue-600"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Toggle showing all benefits or just the first 3
+                                    setShowingAllBenefits(prev => prev === reason.id ? null : reason.id);
+                                  }}
+                                  aria-label={showingAllBenefits === reason.id ? "Show fewer benefits" : "Show all benefits"}
+                                >
+                                  <Eye className="w-3 h-3 mr-1" />
+                                  {showingAllBenefits === reason.id ? "Show Less" : "Show All"}
+                                </Button>
+                              )}
+                            </div>
+                            
                             <div className="space-y-1">
-                              {reason.benefits.filter((benefit, idx) => idx < 3 || calculateSobrietyDays() >= benefit.day).map((benefit, idx) => {
-                                const achieved = calculateSobrietyDays() >= benefit.day;
-                                return (
-                                  <div 
-                                    key={idx} 
-                                    className={`flex items-center gap-2 text-xs ${
-                                      achieved ? 'text-green-600' : 'text-gray-400'
-                                    }`}
-                                  >
-                                    {achieved ? (
-                                      <CheckCircle className="w-3 h-3" />
-                                    ) : (
-                                      <Clock className="w-3 h-3" />
-                                    )}
-                                    <span>Day {benefit.day}: {benefit.title}</span>
-                                  </div>
-                                );
-                              })}
+                              {reason.benefits
+                                .filter((benefit, idx) => {
+                                  // Show all if showingAllBenefits is set to this reason's id
+                                  if (showingAllBenefits === reason.id) return true;
+                                  // Otherwise show first 3 or any achieved ones
+                                  return idx < 3 || calculateSobrietyDays() >= benefit.day;
+                                })
+                                .map((benefit, idx) => {
+                                  const achieved = calculateSobrietyDays() >= benefit.day;
+                                  return (
+                                    <div 
+                                      key={idx} 
+                                      className={`flex items-center gap-2 text-xs ${
+                                        achieved ? 'text-green-600' : 'text-gray-500'
+                                      }`}
+                                    >
+                                      {achieved ? (
+                                        <CheckCircle className="w-3 h-3" aria-hidden="true" />
+                                      ) : (
+                                        <Clock className="w-3 h-3" aria-hidden="true" />
+                                      )}
+                                      <span>
+                                        Day {benefit.day}: {benefit.title}
+                                        {achieved && <span className="sr-only"> (achieved)</span>}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
                             </div>
                           </div>
                           
-                          <p className="text-xs font-medium text-purple-600">
+                          <p className="text-xs font-medium text-purple-700">
                             Try this: {reason.alternative}
                           </p>
                         </motion.div>
@@ -1195,7 +1361,7 @@ const SobrietySupport = () => {
           </div>
         )}
         
-        {/* Other mobile tabs would be implemented here in a similar pattern */}
+        {/* Journal Tab - Mobile */}
         {activeTab === "journal" && (
           <Card>
             <CardContent className="p-4 space-y-4">
@@ -1204,6 +1370,7 @@ const SobrietySupport = () => {
                 value={newJournalEntry}
                 onChange={(e) => setNewJournalEntry(e.target.value)}
                 className="min-h-24"
+                aria-label="Journal entry text"
               />
               
               <div className="flex flex-wrap gap-2 items-center">
@@ -1217,6 +1384,16 @@ const SobrietySupport = () => {
                         journalMood === mood ? 'bg-purple-100 text-purple-800 hover:bg-purple-200' : ''
                       }`}
                       onClick={() => setJournalMood(mood)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setJournalMood(mood);
+                        }
+                      }}
+                      tabIndex={0}
+                      role="radio"
+                      aria-checked={journalMood === mood}
+                      aria-label={`Mood: ${mood}`}
                     >
                       {getMoodEmoji(mood)} {mood}
                     </Badge>
@@ -1224,19 +1401,33 @@ const SobrietySupport = () => {
                 </div>
               </div>
               
-              <Button onClick={addJournalEntry} className="w-full">
+              <Button onClick={addJournalEntry} className="w-full" aria-label="Save journal entry">
                 <Save className="w-4 h-4 mr-2" />
                 Save Entry
               </Button>
               
               <div className="space-y-3 pt-3 border-t">
-                <h3 className="font-medium text-sm">Previous Entries</h3>
+                <div className="flex justify-between items-center">
+                  <h3 className="font-medium text-sm">Previous Entries</h3>
+                  
+                  {journalEntries.length > 3 && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-xs h-6 px-2 text-blue-600"
+                      onClick={() => setShowAllJournalEntries(!showAllJournalEntries)}
+                      aria-label={showAllJournalEntries ? "Show fewer entries" : "View all entries"}
+                    >
+                      {showAllJournalEntries ? "Show Less" : `View All (${journalEntries.length})`}
+                    </Button>
+                  )}
+                </div>
                 
                 {journalEntries.length === 0 && (
                   <p className="text-gray-500 text-xs italic">No entries yet.</p>
                 )}
                 
-                {journalEntries.slice(0, 3).map((entry) => (
+                {(showAllJournalEntries ? journalEntries : journalEntries.slice(0, 3)).map((entry) => (
                   <Card key={entry.id} className="bg-gray-50">
                     <CardContent className="p-3">
                       <div className="flex justify-between items-start mb-1">
@@ -1247,12 +1438,6 @@ const SobrietySupport = () => {
                     </CardContent>
                   </Card>
                 ))}
-                
-                {journalEntries.length > 3 && (
-                  <Button variant="ghost" size="sm" className="w-full">
-                    View All ({journalEntries.length}) Entries
-                  </Button>
-                )}
               </div>
             </CardContent>
           </Card>
@@ -1267,6 +1452,7 @@ const SobrietySupport = () => {
                   placeholder="Describe a trigger"
                   value={newTrigger}
                   onChange={(e) => setNewTrigger(e.target.value)}
+                  aria-label="New trigger description"
                 />
                 
                 <div className="flex items-center gap-2">
@@ -1274,6 +1460,7 @@ const SobrietySupport = () => {
                     value={triggerIntensity}
                     onChange={(e) => setTriggerIntensity(parseInt(e.target.value, 10))}
                     className="w-full rounded-md border border-gray-300 p-2 text-sm"
+                    aria-label="Trigger intensity level"
                   >
                     <option value="1">Very Low</option>
                     <option value="3">Low</option>
@@ -1282,7 +1469,7 @@ const SobrietySupport = () => {
                     <option value="9">Very High</option>
                   </select>
                   
-                  <Button onClick={addTrigger}>
+                  <Button onClick={addTrigger} aria-label="Add new trigger">
                     <PlusCircle className="w-4 h-4 mr-1" />
                     Add
                   </Button>
@@ -1338,6 +1525,18 @@ const SobrietySupport = () => {
                     onClick={() => setSelectedCopingStrategy(
                       selectedCopingStrategy === strategy.id ? null : strategy.id
                     )}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedCopingStrategy(
+                          selectedCopingStrategy === strategy.id ? null : strategy.id
+                        );
+                      }
+                    }}
+                    role="button"
+                    aria-expanded={selectedCopingStrategy === strategy.id}
+                    aria-controls={`mobile-strategy-content-${strategy.id}`}
                   >
                     <CardContent className="p-3">
                       <div className="flex items-center justify-between">
@@ -1347,7 +1546,7 @@ const SobrietySupport = () => {
                         </div>
                         <ChevronDown className={`w-4 h-4 transition-transform ${
                           selectedCopingStrategy === strategy.id ? 'rotate-180' : ''
-                        }`} />
+                        }`} aria-hidden="true" />
                       </div>
                       
                       <AnimatePresence>
@@ -1357,6 +1556,7 @@ const SobrietySupport = () => {
                             animate={{ opacity: 1, height: 'auto' }}
                             exit={{ opacity: 0, height: 0 }}
                             className="mt-2 overflow-hidden"
+                            id={`mobile-strategy-content-${strategy.id}`}
                           >
                             <p className="text-xs text-gray-600 mb-2">{strategy.description}</p>
                             <ol className="list-decimal list-inside space-y-1 text-xs pl-1">
@@ -1364,6 +1564,23 @@ const SobrietySupport = () => {
                                 <li key={idx}>{step}</li>
                               ))}
                             </ol>
+                            <div className="mt-3 flex justify-end">
+                              <Button 
+                                size="sm"
+                                variant="outline"
+                                className="text-xs py-1 h-7"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const message = `I used the ${strategy.title} technique today and it helped me stay on track.`;
+                                  setNewJournalEntry(message);
+                                  setActiveTab('journal');
+                                }}
+                                aria-label={`Log success using ${strategy.title} technique`}
+                              >
+                                <ThumbsUp className="w-3 h-3 mr-1" />
+                                Log Success
+                              </Button>
+                            </div>
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -1397,13 +1614,32 @@ const SobrietySupport = () => {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+                        aria-label={`Visit ${resource.name} website`}
                       >
                         Visit Resource
-                        <ArrowRight className="w-3 h-3 ml-1" />
+                        <ArrowRight className="w-3 h-3 ml-1" aria-hidden="true" />
                       </a>
                     </CardContent>
                   </Card>
                 ))}
+              </div>
+              
+              <div className="bg-blue-50 rounded-lg p-3 mt-4">
+                <h3 className="font-medium text-blue-700 text-sm mb-2">Find Local Support</h3>
+                <p className="text-xs text-gray-600 mb-3">
+                  In-person meetings can provide valuable face-to-face support:
+                </p>
+                <div className="space-y-2">
+                  <a 
+                    href="https://www.aa.org/find-aa"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+                  >
+                    <Users className="w-3 h-3 mr-1" />
+                    Find AA Meetings Near You
+                  </a>
+                </div>
               </div>
             </CardContent>
           </Card>
